@@ -254,13 +254,25 @@
   table.nx td.lowcell{color:var(--accent);background:#fdf0e8}
   .cell-flag{font-size:10px;color:#fff;background:var(--accent);border-radius:4px;padding:1px 4px;margin-left:4px;vertical-align:middle;white-space:nowrap}
   .ok-col{width:58px;text-align:center}
+  .del-col{width:40px;text-align:center}
   .row-ok-btn{
     font-size:11.5px;font-weight:500;cursor:pointer;border:1px solid var(--line);border-radius:7px;
     background:var(--paper);color:var(--ink-soft);padding:5px 9px;transition:all .15s;white-space:nowrap;
   }
   .row-ok-btn:hover{border-color:var(--ink-soft)}
   .row-ok-btn.on{background:var(--green);border-color:var(--green);color:#fff}
-  tr.row-ok td:not(.ok-col){background:#f2f7f2}
+  .row-del-btn{
+    font-size:12px;cursor:pointer;border:1px solid transparent;border-radius:6px;
+    background:transparent;color:var(--ink-faint);padding:4px 7px;transition:all .15s;line-height:1;
+  }
+  .row-del-btn:hover{background:#fbeeea;color:var(--accent);border-color:#f0d5cc}
+  tr.row-ok td:not(.ok-col):not(.del-col){background:#f2f7f2}
+  tr.row-unc td:not(.ok-col):not(.del-col){background:#fdf6ec}
+  .unc-hint{font-size:10px;color:#a05a1f;margin-top:4px;white-space:nowrap}
+  /* original-image comparison panel in table section */
+  .table-orig{margin-top:16px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+  .table-orig .rc-img{min-height:120px;max-height:300px;display:flex;align-items:center;justify-content:center;background:#fff}
+  .table-orig .rc-img img{max-width:100%;max-height:280px;display:block}
 </style>
 </head>
 <body>
@@ -372,6 +384,11 @@
       <div class="vp-body" id="vpBody"></div>
     </div>
 
+    <div class="table-orig hidden" id="tableOrig">
+      <div class="rc-img"><img id="tableOrigImg" alt="当前工作表原图对照"></div>
+      <div class="rc-cap">当前工作表原图对照 · 逐行核对时请对照本图检查品名与数量是否准确</div>
+    </div>
+
     <div class="controls">
       <div class="field"><label>工作表</label><select id="sheetSel" style="min-width:200px"></select></div>
       <div class="field"><label>当前列数</label><input type="text" id="colCount" value="2" style="min-width:80px"></div>
@@ -413,6 +430,7 @@ const secTable=$('sec-table'), grid=$('grid'), colCount=$('colCount'), applyCols
 const addRowBtn=$('addRowBtn'), exportBtn=$('exportBtn'), sheetCount=$('sheetCount');
 const validateBtn=$('validateBtn'), validatePanel=$('validatePanel'), vpHead=$('vpHead'), vpBody=$('vpBody');
 const toast=$('toast');
+const tableOrig=$('tableOrig'), tableOrigImg=$('tableOrigImg');
 
 // image model: {id, file, name, url, items:[{text,score,poly}], done, reviewed}
 let images=[];
@@ -724,13 +742,26 @@ function allReviewed(){
 }
 
 /* ---------- split into table (per image) ---------- */
-const QTY_UNIT='片|包|盒|袋|个|Kg|kg|克|g|听|瓶|箱|只|条|份|斤|两|件|T|桶|扎|把|升|L|ml|毫升|双|对|头|尾|排|块|卷|罐|串|打|枚|板|束|提|吨';
+// 数量单位词表（用于把“数量 + 单位”从行尾识别出来）
+const QTY_UNIT='片|包|盒|袋|个|Kg|kg|克|g|听|瓶|箱|只|条|份|斤|两|件|T|桶|扎|把|升|L|ml|毫升|双|对|头|尾|排|块|卷|罐|串|打|枚|板|束|提|吨|张';
+const RE_PURE_QTY=new RegExp('^\\d+(\\.\\d+)?$');                       // 纯数字
+const RE_QTY_UNIT=new RegExp('^\\d+(\\.\\d+)?('+QTY_UNIT+')$','i');     // 数字+单位
+function isQtyToken(t){ t=(t||'').trim(); return RE_PURE_QTY.test(t)||RE_QTY_UNIT.test(t); }
+// 从文本尾部提取“数字 或 数字+单位”，若前面还有像样的品名则拆分，否则不拆
+function splitTrailingQty(t){
+  t=(t||'').trim();
+  const m=t.match(new RegExp('^(.*?)(\\d+(?:\\.\\d+)?(?:'+QTY_UNIT+')?)$','i'));
+  if(m&&m[2]&&m[2].length&&m[1]&&/[a-zA-Z\u4e00-\u9fa5]/.test(m[1])) return {name:m[1].trim(),qty:m[2].trim()};
+  return null;
+}
+function startsWithNumber(t){ return /^\s*\d/.test(t||''); }
+// 按空间坐标把识别框聚合成行（行内按水平中心排序）
 function groupToRows(items){
   const boxes=items.map(it=>{
     const p=it.poly||[];
     const xs=p.map(pt=>pt[0]), ys=p.map(pt=>pt[1]);
-    return {it, x:Math.min(...xs), y:Math.min(...ys), w:Math.max(...xs)-Math.min(...xs), h:Math.max(...ys)-Math.min(...ys),
-            cx:(Math.min(...xs)+Math.max(...xs))/2, cy:(Math.min(...ys)+Math.max(...ys))/2};
+    return {it,x:Math.min(...xs),y:Math.min(...ys),w:Math.max(...xs)-Math.min(...xs),h:Math.max(...ys)-Math.min(...ys),
+            cx:(Math.min(...xs)+Math.max(...xs))/2,cy:(Math.min(...ys)+Math.max(...ys))/2};
   }).sort((a,b)=>a.y-b.y);
   const rows=[];
   for(const b of boxes){
@@ -741,43 +772,46 @@ function groupToRows(items){
       const rowBottom=Math.max(...row.map(r=>r.y+r.h));
       const midRow=(rowTop+rowBottom)/2;
       const rowH=rowBottom-rowTop;
-      if(Math.abs(b.cy-midRow) < Math.max(12, rowH*0.5) && Math.abs(b.x-row[0].x) > 0){
-        row.push(b); placed=true; break;
-      }
+      if(Math.abs(b.cy-midRow) < Math.max(12,rowH*0.5)){ row.push(b); placed=true; break; }
     }
     if(!placed) rows.push([b]);
   }
-  return rows.map(row=>row.sort((a,b)=>a.x-b.x));
+  return rows.map(row=>row.sort((a,b)=>a.cx-b.cx));
 }
-// 把一行中的若干识别框解析为“品名 + 数量”两列（依赖行尾数量单位）
-function parseRowBoxes(boxes){
-  const list=boxes.map(b=>({t:(b.it.text||'').trim(), s:b.it.score})).filter(b=>b.t);
+// 数量感知分列：右向左收集纯数量令牌（数字/数字+单位），其余为品名；
+// 解析不确定时置 uncertain=true，交由人工核对，绝不猜测写死。
+function parseRow(boxes){
+  const list=boxes.map(b=>({t:(b.it.text||'').trim(),s:+b.it.score})).filter(b=>b.t);
   if(!list.length) return null;
-  const joined=list.map(b=>b.t).join('');
-  const re=new RegExp('(\\d+(?:\\.\\d+)?)('+QTY_UNIT+')$');
-  const m=joined.match(re);
-  if(m){
-    const splitAt=m.index;
-    let acc=0, nameScore=list[0].s, qtyScore=null;
-    for(const b of list){
-      if(acc < splitAt) nameScore=b.s;
-      acc+=b.t.length;
-      if(qtyScore===null && acc>=splitAt) qtyScore=b.s;
-    }
-    if(qtyScore===null) qtyScore=list[list.length-1].s;
-    return { name:joined.slice(0,splitAt), qty:joined.slice(splitAt), nameScore, qtyScore };
+  const qtyTokens=[]; let i=list.length-1;
+  while(i>=0 && isQtyToken(list[i].t)){ qtyTokens.unshift(list[i]); i--; }
+  const nameParts=list.slice(0,i+1);
+  let qtyText=qtyTokens.map(q=>q.t).join(' ');
+  let qtyScore=qtyTokens.length?Math.min(...qtyTokens.map(q=>q.s)):null;
+  let uncertain=false;
+  // 若行尾没有独立的数量令牌，尝试从最右的品名框尾部拆出“数量+单位”
+  if(!qtyTokens.length && nameParts.length){
+    const last=nameParts[nameParts.length-1];
+    const sp=splitTrailingQty(last.t);
+    if(sp){ last.t=sp.name; qtyText=sp.qty; qtyScore=last.s; uncertain=true; }
   }
-  return { name:joined, qty:'', nameScore:Math.round(Math.min(...list.map(b=>b.s))*1000)/1000, qtyScore:0.5 };
+  const nameText=nameParts.map(n=>n.t).join(' ');
+  // 品名以数字开头却无数量，可能数量写在前面，标记待人工核对
+  if(!qtyText && startsWithNumber(nameText)) uncertain=true;
+  const nameScore=Math.min(...nameParts.map(n=>n.s));
+  const qs=qtyScore==null?0.5:qtyScore;
+  return { name:nameText, qty:qtyText, nameScore, qtyScore:qs, uncertain };
 }
 function makeSnapshot(img){
   const rows=groupToRows(img.items||[]);
-  const out={ name:img.name, rows:[], confs:[], confirmed:[] };
+  const out={ name:img.name, rows:[], confs:[], confirmed:[], uncertain:[] };
   rows.forEach(boxrow=>{
-    const p=parseRowBoxes(boxrow);
+    const p=parseRow(boxrow);
     if(!p) return;
-    out.rows.push([p.name, p.qty]);
-    out.confs.push([p.nameScore, p.qtyScore]);
+    out.rows.push([p.name,p.qty]);
+    out.confs.push([p.nameScore,p.qtyScore]);
     out.confirmed.push(false);
+    out.uncertain.push(!!p.uncertain);
   });
   return out;
 }
@@ -785,6 +819,7 @@ function makeSnapshot(img){
 let editRows=[];
 let editConfs=[];
 let editConfirmed=[];
+let editUncertain=[];
 let activeSnapName=null;
 function currentSnap(){ return tableSnapshots.find(s=>s.name===activeSnapName)||null; }
 
@@ -816,11 +851,15 @@ sheetSel.addEventListener('change',e=>{
 function loadEditRows(name){
   const snap=tableSnapshots.find(s=>s.name===name)||tableSnapshots[0];
   activeSnapName=snap?snap.name:null;
-  if(!snap){ editRows=[]; editConfs=[]; editConfirmed=[]; currentCols=2; renderTable(); return; }
+  if(!snap){ editRows=[]; editConfs=[]; editConfirmed=[]; editUncertain=[]; currentCols=2; renderTable(); return; }
   editRows=snap.rows.map(r=>r.map(c=>String(c||'').trim()));
   editConfs=snap.confs.map(r=>r.slice());
   editConfirmed=(snap.confirmed||[]).slice();
+  editUncertain=(snap.uncertain||[]).slice();
   currentCols=Math.max(2,...editRows.map(r=>r.length));
+  // 显示当前工作表对应的原图，便于逐行核对
+  const img=images.find(i=>i.name===snap.name);
+  if(img){ tableOrigImg.src=img.url||''; tableOrig.classList.remove('hidden'); }
   renderTable();
   updateSheetSel();
 }
@@ -831,6 +870,7 @@ function persistEdit(){
     snap.rows=editRows.map(r=>r.map(c=>String(c==null?'':c).replace(/⚠待确认/g,'').trim()));
     snap.confs=editConfs.map(r=>r.map(c=>(c==null?1:c)));
     snap.confirmed=editConfirmed.slice();
+    snap.uncertain=editUncertain.slice();
   }
 }
 
@@ -849,7 +889,7 @@ function validateData(){
   editRows.forEach((row,ri)=>{
     const cells=row.map(c=>String(c==null?'':c).replace(/⚠待确认/g,'').trim());
     const name=cells[0]||'';
-    const qty=editConfs[ri]&&editConfs[ri][1] || cells[1]||'';
+    const qty=(cells[1]||'').trim();
     if(!name) issues.push({type:'bad',msg:`第 ${ri+1} 行：品名为空`});
     if(qty && !/^\d+(\.\d+)?[a-zA-Z\u4e00-\u9fa5]+$/.test(qty) && !/^\d+(\.\d+)?$/.test(qty))
       issues.push({type:'bad',msg:`第 ${ri+1} 行：数量“${qty}”格式异常`});
@@ -876,14 +916,15 @@ function renderTable(){
   colCount.value=currentCols;
   let html='<thead><tr><th class="ok-col">✓核对</th>';
   for(let c=0;c<currentCols;c++) html+=`<th>${c===0?'品名':'列 '+(c+1)}</th>`;
-  html+='</tr></thead><tbody>';
+  html+='<th class="del-col"></th></tr></thead><tbody>';
   if(!editRows.length){
     html+='</tbody>'; grid.innerHTML=html; return;
   }
   editRows.forEach((row,ri)=>{
     const ok=!!editConfirmed[ri];
-    html+=`<tr${ok?' class="row-ok"':''} data-ri="${ri}">`;
-    html+=`<td class="ok-col"><button class="row-ok-btn${ok?' on':''}" data-r="${ri}" title="对照原图核对本行">${ok?'✓ 已核对':'核对'}</button></td>`;
+    const unc=!ok && !!editUncertain[ri];
+    html+=`<tr${ok?' class="row-ok"':''}${unc?' class="row-unc"':''} data-ri="${ri}">`;
+    html+=`<td class="ok-col"><button class="row-ok-btn${ok?' on':''}" data-r="${ri}" title="对照原图核对本行">${ok?'✓ 已核对':'核对'}</button>${unc?'<div class="unc-hint">⚠建议核对</div>':''}</td>`;
     for(let c=0;c<currentCols;c++){
       const v=String(row[c]==null?'':row[c]).replace(/⚠待确认/g,'').trim();
       const sc=editConfs[ri]?editConfs[ri][c]:null;
@@ -892,6 +933,7 @@ function renderTable(){
       const badge=low?' <span class="cell-flag" data-r="'+ri+'" data-c="'+c+'">⚠低置信</span>':'';
       html+=`<td ${cls} data-r="${ri}" data-c="${c}">${escapeHtml(v)}${badge}</td>`;
     }
+    html+=`<td class="del-col"><button class="row-del-btn" data-r="${ri}" title="删除本行">✕</button></td>`;
     html+='</tr>';
   });
   html+='</tbody>';
@@ -905,17 +947,29 @@ function bindCellHandlers(){
       if(!editRows[r]) editRows[r]=[];
       editRows[r][c]=td.textContent.replace(/⚠待确认/g,'').trim();
       if(editConfs[r]) editConfs[r][c]=1;   // 手工修改视为已校正
+      if(editUncertain[r]) editUncertain[r]=false;
       const flag=td.querySelector('.cell-flag');
       if(flag) flag.remove();
       td.classList.remove('lowcell');
+      persistEdit();
     });
   });
   grid.querySelectorAll('.row-ok-btn').forEach(btn=>{
     btn.addEventListener('click',()=>{
       const r=+btn.dataset.r;
       editConfirmed[r]=!editConfirmed[r];
+      if(editConfirmed[r]) editUncertain[r]=false;
       persistEdit();
       renderTable();
+    });
+  });
+  grid.querySelectorAll('.row-del-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const r=+btn.dataset.r;
+      editRows.splice(r,1); editConfs.splice(r,1);
+      editConfirmed.splice(r,1); editUncertain.splice(r,1);
+      persistEdit(); renderTable();
+      showToast('已删除该行');
     });
   });
 }
@@ -937,6 +991,7 @@ addRowBtn.addEventListener('click',()=>{
   editRows.push(Array(currentCols).fill(''));
   editConfs.push(Array(currentCols).fill(1));
   editConfirmed.push(false);
+  editUncertain.push(false);
   renderTable();
   const sc=grid.closest('.table-scroll'); sc.scrollTop=sc.scrollHeight;
 });
