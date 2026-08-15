@@ -135,6 +135,31 @@
   .tab .tab-del{margin-left:6px;font-weight:700;color:inherit;opacity:.7}
   .tab .tab-del:hover{opacity:1}
 
+  /* result compare: original image + ocr text side by side */
+  .result-compare{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:6px}
+  @media(max-width:820px){.result-compare{grid-template-columns:1fr}}
+  .rc-img{
+    border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;
+    display:flex;align-items:center;justify-content:center;min-height:180px;max-height:420px;
+  }
+  .rc-img img{max-width:100%;max-height:400px;display:block}
+  .rc-img .rc-empty{color:var(--ink-faint);font-size:13px;padding:20px}
+  .rc-cap{font-size:11.5px;color:var(--ink-faint);margin-top:6px;font-family:'IBM Plex Mono',monospace}
+
+  /* validation */
+  .validate-panel{display:none;margin-top:14px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--white)}
+  .validate-panel.show{display:block}
+  .validate-panel .vp-head{
+    display:flex;align-items:center;gap:8px;padding:10px 14px;font-size:13px;font-weight:500;
+    border-bottom:1px solid var(--line);
+  }
+  .validate-panel.ok .vp-head{background:#eef4ee;color:var(--green)}
+  .validate-panel.warn .vp-head{background:#fbf0e6;color:#a05a1f}
+  .validate-panel .vp-body{padding:10px 14px;font-size:13px;line-height:1.8;color:var(--ink-soft)}
+  .validate-panel .vp-body ul{margin:0;padding-left:18px}
+  .validate-panel .vp-body li.bad{color:var(--accent)}
+  .validate-panel .vp-body li.ok{color:var(--green)}
+
   /* controls */
   .controls{display:flex;flex-wrap:wrap;gap:14px;margin-top:20px;align-items:flex-end}
   .field{display:flex;flex-direction:column;gap:6px}
@@ -209,6 +234,33 @@
   @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
   .fade-in{animation:fadeIn .35s ease}
   @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* review bar in step 2 */
+  .review-bar{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
+  .review-btn{border-color:var(--green);color:var(--green)}
+  .review-btn.confirmed{background:var(--green);border-color:var(--green);color:#fff}
+  .review-btn.confirmed:hover{background:var(--green)}
+  .review-count{font-size:12.5px;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace}
+  .review-warn{font-size:12.5px;color:var(--accent)}
+
+  /* confidence line badges in OCR text */
+  .ocr-line{display:flex;align-items:flex-start;gap:8px;padding:3px 0;border-bottom:1px dashed rgba(28,26,23,.06)}
+  .ocr-line .conf{flex:none;font-family:'IBM Plex Mono',monospace;font-size:10.5px;width:44px;text-align:right;color:var(--ink-faint);padding-top:2px}
+  .ocr-line .conf.low{color:var(--accent);font-weight:700}
+  .ocr-line .txt{flex:1;white-space:pre-wrap;line-height:1.6}
+  .ocr-line .txt.low{color:var(--accent);font-weight:500}
+  .ocr-legend{font-size:11.5px;color:var(--ink-faint);margin-top:6px;font-family:'IBM Plex Mono',monospace;line-height:1.6}
+  .ocr-legend .low{color:var(--accent);font-weight:700}
+  table.nx td.lowcell{color:var(--accent);background:#fdf0e8}
+  .cell-flag{font-size:10px;color:#fff;background:var(--accent);border-radius:4px;padding:1px 4px;margin-left:4px;vertical-align:middle;white-space:nowrap}
+  .ok-col{width:58px;text-align:center}
+  .row-ok-btn{
+    font-size:11.5px;font-weight:500;cursor:pointer;border:1px solid var(--line);border-radius:7px;
+    background:var(--paper);color:var(--ink-soft);padding:5px 9px;transition:all .15s;white-space:nowrap;
+  }
+  .row-ok-btn:hover{border-color:var(--ink-soft)}
+  .row-ok-btn.on{background:var(--green);border-color:var(--green);color:#fff}
+  tr.row-ok td:not(.ok-col){background:#f2f7f2}
 </style>
 </head>
 <body>
@@ -256,19 +308,21 @@
           <div class="field">
             <label>识别语言</label>
             <select id="lang">
-              <option value="chi_sim+eng">中文 + 英文</option>
-              <option value="chi_sim">中文</option>
-              <option value="eng">英文</option>
+              <option value="ch">中文（含中英混合）</option>
+              <option value="en">英文</option>
             </select>
           </div>
         </div>
         <div class="field" style="margin-top:14px">
           <label>识别模式</label>
           <select id="mode">
+            <option value="table">按表格结构（自动分行拆列）</option>
             <option value="raw">整页文本（自己排版）</option>
-            <option value="table">按表格结构（自动分行）</option>
           </select>
         </div>
+        <label class="enhance-toggle" style="margin-top:14px;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-soft);cursor:pointer">
+          <input type="checkbox" id="enhance" style="accent-color:var(--accent)"> 图像增强（对比度较低/暗淡时开启）
+        </label>
         <div class="img-tools" style="margin-top:18px">
           <button class="btn btn-primary" id="ocrAllBtn">识别全部 <span>→</span></button>
           <button class="btn" id="ocrCurrentBtn">只识别当前</button>
@@ -284,35 +338,52 @@
 
   <!-- 2. result -->
   <section id="sec-result" class="hidden fade-in">
-    <div class="step-label">02 · 校对文本</div>
-    <h2>检查识别结果</h2>
-    <p class="hint">每张图片的识别结果是独立的，可点击上方页签切换查看并分别校对。横排手写内容会自动按行拆分，每行将作为一个表格行。</p>
+    <div class="step-label">02 · 校验识别</div>
+    <h2>核对识别结果</h2>
+    <p class="hint">左侧为原图、右侧为识别文本，请逐行与原图对照复核。每张图片独立页签，可切换分别校对；修改文本后点击“按行拆分为表格”。</p>
     <div class="tabs" id="tabBar"></div>
-    <div class="result-block">
-      <textarea class="ocr-text" id="ocrText" spellcheck="false"></textarea>
+    <div class="result-block result-compare">
+      <div class="img-panel">
+        <div class="rc-img"><img id="rcImg" alt="原图对照"></div>
+        <div class="rc-cap">原图对照 · 点上方页签切换</div>
+      </div>
+      <div class="img-panel">
+        <div class="ocr-lines" id="ocrLines"></div>
+        <div class="ocr-legend">红色标注为<strong class="low">低置信度</strong>识别项，请务必对照原图人工核对修正。</div>
+      </div>
     </div>
-    <div class="toolbar">
-      <button class="btn btn-sm" id="splitBtn">按行拆分为表格 <span>↓</span></button>
+    <div class="review-bar">
+      <button class="btn btn-sm review-btn" id="reviewBtn">✓ 确认本页已核对</button>
+      <span class="badge review-count" id="reviewCount">已核对 0/0</span>
+      <span class="badge review-warn" id="reviewWarn"></span>
       <div class="spacer"></div>
-      <span class="badge" id="lineCount">0 行</span>
+      <button class="btn btn-sm" id="splitBtn">按行拆分为表格 <span>↓</span></button>
     </div>
   </section>
 
   <!-- 3. table -->
   <section id="sec-table" class="hidden fade-in">
-    <div class="step-label">03 · 整理表格</div>
-    <h2>编辑单元格再导出</h2>
-    <p class="hint">点击单元格可直接编辑。若一行内需要用逗号 / Tab 拆成多列，可先在上一步用“分隔线”拆分。多张图片时，每张图片会导出为一个独立 Sheet。</p>
+    <div class="step-label">03 · 校验数据</div>
+    <h2>校验并整理表格</h2>
+    <p class="hint">点击单元格可直接编辑。为保证数据准确，导出前必须完成三步：① 上一步对每张图片点“确认已核对”；② 本页对<strong>每一行</strong>对照原图点击“核对”，逐行确认无误；③ 点击“校验数据”。三步任一未完成都禁止导出，杜绝错误数据外泄。</p>
+
+    <div class="validate-panel" id="validatePanel">
+      <div class="vp-head" id="vpHead"></div>
+      <div class="vp-body" id="vpBody"></div>
+    </div>
+
     <div class="controls">
-      <div class="field"><label>当前列数</label><input type="text" id="colCount" value="1" style="min-width:80px"></div>
+      <div class="field"><label>工作表</label><select id="sheetSel" style="min-width:200px"></select></div>
+      <div class="field"><label>当前列数</label><input type="text" id="colCount" value="2" style="min-width:80px"></div>
       <button class="btn btn-ghost btn-sm" id="applyCols">应用列数</button>
-      <span class="badge" style="align-self:center">列数改变后单元格按从左到右重新分配</span>
+      <span class="badge" style="align-self:center">切换工作表可逐图核对；列数改变后单元格按从左到右重新分配</span>
     </div>
     <div class="table-scroll">
       <table class="nx" id="grid"></table>
     </div>
     <div class="toolbar">
       <button class="btn btn-sm" id="addRowBtn">＋ 添加行</button>
+      <button class="btn btn-sm" id="validateBtn">✓ 校验数据</button>
       <div class="spacer"></div>
       <span class="badge" id="sheetCount"></span>
       <button class="btn btn-primary" id="exportBtn">导出 Excel <span>↧</span></button>
@@ -320,357 +391,591 @@
   </section>
 
   <footer>
-    墨格 · 手写转表 — 纯前端本地工具，基于 <a href="https://github.com/naptha/tesseract.js" target="_blank" rel="noopener">Tesseract.js</a> 与 <a href="https://sheetjs.com" target="_blank" rel="noopener">SheetJS</a> 构建。<br>
-    首次识别需联网下载识别模型，之后浏览器会缓存，可离线使用。
+    墨格 · 手写转表 — 纯前端本地工具，基于 <a href="https://github.com/PaddlePaddle/PaddleOCR/tree/main/paddleocr-js" target="_blank" rel="noopener">PaddleOCR.js</a>（PP-OCRv6）与 <a href="https://sheetjs.com" target="_blank" rel="noopener">SheetJS</a> 构建。<br>
+    首次识别需联网下载识别模型（约 30MB），之后浏览器会缓存。图片与数据全程本地处理，绝不上传。
   </footer>
 </div>
 
 <div id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script>
-(function(){
-  'use strict';
-  const $ = id => document.getElementById(id);
-  const dropzone=$('dropzone'), fileInput=$('fileInput'), previewImg=$('previewImg');
-  const previewRow=$('previewRow'), thumbGrid=$('thumbGrid'), brightness=$('brightness'), contrast=$('contrast');
-  const progress=$('progress'), fill=$('fill'), pStatus=$('pStatus');
-  const ocrAllBtn=$('ocrAllBtn'), ocrCurrentBtn=$('ocrCurrentBtn'), lang=$('lang'), mode=$('mode');
-  const secResult=$('sec-result'), ocrText=$('ocrText'), splitBtn=$('splitBtn'), lineCount=$('lineCount'), tabBar=$('tabBar');
-  const secTable=$('sec-table'), grid=$('grid'), colCount=$('colCount'), applyCols=$('applyCols');
-  const addRowBtn=$('addRowBtn'), exportBtn=$('exportBtn'), sheetCount=$('sheetCount');
-  const toast=$('toast');
+<script type="module">
+import { PaddleOCR } from 'https://cdn.jsdelivr.net/npm/@paddleocr/paddleocr-js@0.4.2/+esm';
+'use strict';
+const $ = id => document.getElementById(id);
+const dropzone=$('dropzone'), fileInput=$('fileInput'), previewImg=$('previewImg');
+const previewRow=$('previewRow'), thumbGrid=$('thumbGrid'), brightness=$('brightness'), contrast=$('contrast');
+const progress=$('progress'), fill=$('fill'), pStatus=$('pStatus');
+const ocrAllBtn=$('ocrAllBtn'), ocrCurrentBtn=$('ocrCurrentBtn'), lang=$('lang'), mode=$('mode'), enhance=$('enhance');
+const secResult=$('sec-result'), ocrLines=$('ocrLines'), rcImg=$('rcImg'), splitBtn=$('splitBtn'), tabBar=$('tabBar');
+const reviewBtn=$('reviewBtn'), reviewCount=$('reviewCount'), reviewWarn=$('reviewWarn');
+const secTable=$('sec-table'), grid=$('grid'), colCount=$('colCount'), applyCols=$('applyCols'), sheetSel=$('sheetSel');
+const addRowBtn=$('addRowBtn'), exportBtn=$('exportBtn'), sheetCount=$('sheetCount');
+const validateBtn=$('validateBtn'), validatePanel=$('validatePanel'), vpHead=$('vpHead'), vpBody=$('vpBody');
+const toast=$('toast');
 
-  // image model: {id, file, name, url, text, done}
-  let images=[];
-  let currentIndex=-1;      // selected image for preview
-  let activeTextIndex=-1;   // which image's text is shown in result textarea
-  // raw table data snapshot per image for export
-  let tableSnapshots=[];    // {name, rows:[[...]]}
-  let currentCols=1;
-  let seq=0;
+// image model: {id, file, name, url, items:[{text,score,poly}], done, reviewed}
+let images=[];
+let currentIndex=-1;      // selected image for preview
+let activeTextIndex=-1;   // which image is shown in result view
+let tableSnapshots=[];    // {name, rows:[[...]], confs:[[...]]} per image
+let currentCols=1;
+let seq=0;
+const CONF_THRESH = 0.8;  // below this -> flagged as low confidence
 
-  /* ---------- toast ---------- */
-  let toastTimer;
-  function showToast(msg,ms=2600){
-    toast.textContent=msg;toast.classList.add('show');
-    clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),ms);
-  }
+/* ---------- toast ---------- */
+let toastTimer;
+function showToast(msg,ms=2600){
+  toast.textContent=msg;toast.classList.add('show');
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),ms);
+}
 
-  /* ---------- upload (multi) ---------- */
-  function addFiles(fileList){
-    const files=Array.from(fileList||[]);
-    if(!files.length) return;
-    const added=[];
-    files.forEach(f=>{
-      if(!f.type.match(/^image\//)){ showToast('已跳过非图片文件：'+f.name); return; }
-      images.push({id:++seq, file:f, name:f.name, url:URL.createObjectURL(f), text:'', done:false});
-      added.push(f);
-    });
-    if(!added.length) return;
-    if(currentIndex<0) currentIndex=0;
-    renderThumbs();
-    switchPreview(currentIndex);
-    previewRow.classList.remove('hidden');
-    showToast(`已添加 ${added.length} 张图片`);
-  }
-  function renderThumbs(){
-    thumbGrid.classList.toggle('hidden', images.length===0);
-    thumbGrid.innerHTML=images.map((img,i)=>{
-      const badge=img.done?'<span class="thumb-badge done">✓ 已识别</span>':'<span class="thumb-badge pending">未识别</span>';
-      return `<div class="thumb${i===currentIndex?' active':''}" data-i="${i}">
-        <img src="${img.url}" alt="${img.name}">
-        <button class="thumb-del" data-del="${i}" title="移除">×</button>
-        ${badge}
-        <div class="thumb-name">${img.name}</div>
-      </div>`;
-    }).join('');
-  }
-  function switchPreview(i){
-    if(i<0||i>=images.length) return;
-    currentIndex=i;
-    const img=images[i];
-    previewImg.src=img.url;
-    brightness.value=1; contrast.value=1;
-    applyFilters();
-    renderThumbs();
-  }
-  function applyFilters(){
-    previewImg.style.filter=`brightness(${brightness.value}) contrast(${contrast.value})`;
-  }
-  function removeImage(i){
-    if(i<0||i>=images.length) return;
-    URL.revokeObjectURL(images[i].url);
-    images.splice(i,1);
-    if(currentIndex>=images.length) currentIndex=images.length-1;
-    if(images.length===0){
-      currentIndex=-1; activeTextIndex=-1;
-      previewRow.classList.add('hidden');
-      thumbGrid.classList.add('hidden');
-      return;
-    }
-    if(currentIndex<0) currentIndex=0;
-    switchPreview(currentIndex);
-    renderResultTabs();
-  }
-  dropzone.addEventListener('click',()=>fileInput.click());
-  ['dragover','dragenter'].forEach(ev=>dropzone.addEventListener(ev,e=>{e.preventDefault();dropzone.classList.add('drag');}));
-  ['dragleave','drop'].forEach(ev=>dropzone.addEventListener(ev,e=>{e.preventDefault();dropzone.classList.remove('drag');}));
-  dropzone.addEventListener('drop',e=>addFiles(e.dataTransfer.files));
-  fileInput.addEventListener('change',e=>{ addFiles(e.target.files); fileInput.value=''; });
-  $('addMoreBtn').addEventListener('click',e=>{e.stopPropagation();fileInput.click();});
-  thumbGrid.addEventListener('click',e=>{
-    const del=e.target.closest('.thumb-del');
-    if(del){ removeImage(+del.dataset.del); return; }
-    const t=e.target.closest('.thumb');
-    if(t) switchPreview(+t.dataset.i);
+/* ---------- upload (multi) ---------- */
+function addFiles(fileList){
+  const files=Array.from(fileList||[]);
+  if(!files.length) return;
+  const added=[];
+  files.forEach(f=>{
+    if(!f.type.match(/^image\//)){ showToast('已跳过非图片文件：'+f.name); return; }
+    images.push({id:++seq, file:f, name:f.name, url:URL.createObjectURL(f), items:[], done:false, reviewed:false});
+    added.push(f);
   });
-  brightness.addEventListener('input',applyFilters);
-  contrast.addEventListener('input',applyFilters);
-
-  /* ---------- OCR ---------- */
-  let worker=null;
-  async function getWorker(){
-    if(worker) return worker;
-    worker=await Tesseract.createWorker(lang.value, 1, {
-      logger:m=>{
-        if(m.status==='recognizing text'){
-          const pct=Math.round(m.progress*100);
-          fill.style.width=pct+'%';
-          pStatus.textContent='正在识别文字… '+pct+'%';
-        } else if(m.status==='loading tesseract core'){
-          pStatus.textContent='正在加载识别引擎…';
-          fill.style.width='30%';
-        } else if(m.status==='initializing api'){
-          pStatus.textContent='初始化…';
-          fill.style.width='15%';
-        } else if(m.status==='loading language traineddata'){
-          pStatus.textContent='正在下载语言模型（首次较慢）…';
-          fill.style.width=m.progress?Math.round(m.progress*50):'45%';
-        } else if(m.status==='initializing lang'){
-          pStatus.textContent='加载语言模型…';
-          fill.style.width='60%';
-        }
-      }
-    });
-    return worker;
+  if(!added.length) return;
+  if(currentIndex<0) currentIndex=0;
+  renderThumbs();
+  switchPreview(currentIndex);
+  previewRow.classList.remove('hidden');
+  showToast(`已添加 ${added.length} 张图片`);
+}
+function renderThumbs(){
+  thumbGrid.classList.toggle('hidden', images.length===0);
+  thumbGrid.innerHTML=images.map((img,i)=>{
+    const badge=img.done?'<span class="thumb-badge done">✓ 已识别</span>':'<span class="thumb-badge pending">未识别</span>';
+    return `<div class="thumb${i===currentIndex?' active':''}" data-i="${i}">
+      <img src="${img.url}" alt="${img.name}">
+      <button class="thumb-del" data-del="${i}" title="移除">×</button>
+      ${badge}
+      <div class="thumb-name">${img.name}</div>
+    </div>`;
+  }).join('');
+}
+function switchPreview(i){
+  if(i<0||i>=images.length) return;
+  currentIndex=i;
+  const img=images[i];
+  previewImg.src=img.url;
+  brightness.value=1; contrast.value=1;
+  applyFilters();
+  renderThumbs();
+}
+function applyFilters(){
+  previewImg.style.filter=`brightness(${brightness.value}) contrast(${contrast.value})`;
+}
+function removeImage(i){
+  if(i<0||i>=images.length) return;
+  URL.revokeObjectURL(images[i].url);
+  images.splice(i,1);
+  if(currentIndex>=images.length) currentIndex=images.length-1;
+  if(images.length===0){
+    currentIndex=-1; activeTextIndex=-1;
+    previewRow.classList.add('hidden');
+    thumbGrid.classList.add('hidden');
+    return;
   }
+  if(currentIndex<0) currentIndex=0;
+  switchPreview(currentIndex);
+  renderResultTabs();
+}
+dropzone.addEventListener('click',()=>fileInput.click());
+['dragover','dragenter'].forEach(ev=>dropzone.addEventListener(ev,e=>{e.preventDefault();dropzone.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>dropzone.addEventListener(ev,e=>{e.preventDefault();dropzone.classList.remove('drag');}));
+dropzone.addEventListener('drop',e=>addFiles(e.dataTransfer.files));
+fileInput.addEventListener('change',e=>{ addFiles(e.target.files); fileInput.value=''; });
+$('addMoreBtn').addEventListener('click',e=>{e.stopPropagation();fileInput.click();});
+thumbGrid.addEventListener('click',e=>{
+  const del=e.target.closest('.thumb-del');
+  if(del){ removeImage(+del.dataset.del); return; }
+  const t=e.target.closest('.thumb');
+  if(t) switchPreview(+t.dataset.i);
+});
+brightness.addEventListener('input',applyFilters);
+contrast.addEventListener('input',applyFilters);
 
-  // recognize a specific image by index
-  async function recognizeOne(idx){
-    const img=images[idx];
-    if(!img) return;
-    const w=await getWorker();
-    const src=new Image();
-    src.src=img.url;
-    await new Promise((res,rej)=>{ src.onload=res; src.onerror=rej; });
-    const scale=Math.min(1, 2600/src.naturalWidth);
-    const canvas=document.createElement('canvas');
-    canvas.width=Math.round(src.naturalWidth*scale);
-    canvas.height=Math.round(src.naturalHeight*scale);
-    const ctx=canvas.getContext('2d');
-    ctx.filter=`brightness(${brightness.value}) contrast(${contrast.value})`;
-    ctx.drawImage(src,0,0,canvas.width,canvas.height);
-    const {data}=await w.recognize(canvas);
-    img.text=(data.text||'').trim();
-    img.done=true;
+/* ---------- preprocessing (grayscale + CLAHE) ---------- */
+function preprocess(img){
+  // upscale small images
+  const MAX=2600;
+  let scale=1;
+  if(img.naturalWidth>MAX) scale=MAX/img.naturalWidth;
+  else if(img.naturalWidth<900) scale=Math.min(1.6, 900/img.naturalWidth);
+  const cw=Math.round(img.naturalWidth*scale), ch=Math.round(img.naturalHeight*scale);
+  const c=document.createElement('canvas');
+  c.width=cw; c.height=ch;
+  const ctx=c.getContext('2d');
+  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+  ctx.drawImage(img,0,0,cw,ch);
+  const d=ctx.getImageData(0,0,cw,ch);
+  const px=d.data;
+  // grayscale
+  for(let i=0;i<px.length;i+=4){
+    const g=0.299*px[i]+0.587*px[i+1]+0.114*px[i+2];
+    px[i]=px[i+1]=px[i+2]=g;
   }
+  ctx.putImageData(d,0,0);
+  return clahe(c, 2.0, 8);
+}
+function clahe(canvas, clip, tiles){
+  const w=canvas.width, h=canvas.height;
+  const ctx=canvas.getContext('2d');
+  const d=ctx.getImageData(0,0,w,h);
+  const px=d.data;
+  const gray=new Uint8Array(w*h);
+  for(let i=0;i<w*h;i++) gray[i]=px[i*4];
+  const tw=Math.ceil(w/tiles), th=Math.ceil(h/tiles);
+  const tileMaps=[];
+  for(let ty=0;ty<tiles;ty++){
+    for(let tx=0;tx<tiles;tx++){
+      const x0=tx*tw,y0=ty*th,x1=Math.min(x0+tw,w),y1=Math.min(y0+th,h);
+      const hist=new Array(256).fill(0);
+      for(let y=y0;y<y1;y++) for(let x=x0;x<x1;x++) hist[gray[y*w+x]]++;
+      const limit=Math.floor((x1-x0)*(y1-y0)*clip/256);
+      let excess=0;
+      for(let k=0;k<256;k++){ if(hist[k]>limit){ excess+=hist[k]-limit; hist[k]=limit; } }
+      const inc=excess/256;
+      for(let k=0;k<256;k++) hist[k]+=inc;
+      let cdf=0, cdfMin=-1;
+      for(let k=0;k<256;k++) if(hist[k]>0){ cdfMin=hist[k]; break; }
+      if(cdfMin<0) cdfMin=0;
+      const map=new Array(256);
+      const total=Math.max(1,(x1-x0)*(y1-y0)-cdfMin);
+      for(let k=0;k<256;k++){ cdf+=hist[k]; map[k]=Math.round((cdf-cdfMin)*255/total); }
+      tileMaps.push(map);
+    }
+  }
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      const tx=x/tw, ty=y/th;
+      let tx0=Math.floor(tx), ty0=Math.floor(ty);
+      tx0=Math.max(0,Math.min(tiles-1,tx0)); ty0=Math.max(0,Math.min(tiles-1,ty0));
+      const tx1=Math.min(tiles-1,tx0+1), ty1=Math.min(tiles-1,ty0+1);
+      const fx=tx-tx0, fy=ty-ty0;
+      const v=gray[y*w+x];
+      const m00=tileMaps[ty0*tiles+tx0][v], m10=tileMaps[ty0*tiles+tx1][v];
+      const m01=tileMaps[ty1*tiles+tx0][v], m11=tileMaps[ty1*tiles+tx1][v];
+      const nv=Math.round((m00*(1-fx)+m10*fx)*(1-fy)+(m01*(1-fx)+m11*fx)*fy);
+      const idx=(y*w+x)*4;
+      px[idx]=px[idx+1]=px[idx+2]=nv;
+    }
+  }
+  ctx.putImageData(d,0,0);
+  return canvas;
+}
 
-  // recognize current image only
-  ocrCurrentBtn.addEventListener('click', async ()=>{
-    if(!images.length){ showToast('请先上传图片'); return; }
-    if(currentIndex<0) currentIndex=0;
-    activeTextIndex=currentIndex;
-    ocrAllBtn.disabled=ocrCurrentBtn.disabled=true;
-    progress.classList.add('show'); fill.style.width='5%'; pStatus.textContent='准备中…';
-    try{
-      await recognizeOne(currentIndex);
-      fill.style.width='100%'; pStatus.textContent='识别完成';
-      if(!images[currentIndex].text) showToast('未识别到文字，请尝试调高对比度或更换更清晰的图片');
-      showResultFor(currentIndex);
-    }catch(err){
-      console.error(err); showToast('识别失败：'+err.message);
-    }finally{
-      ocrAllBtn.disabled=ocrCurrentBtn.disabled=false;
-      setTimeout(()=>progress.classList.remove('show'),600);
+/* ---------- OCR engine (PaddleOCR PP-OCRv6) ---------- */
+let engine=null;
+async function getEngine(){
+  if(engine) return engine;
+  pStatus.textContent='正在下载识别模型（首次约 30MB，请稍候）…';
+  fill.style.width='20%';
+  engine=await PaddleOCR.create({
+    lang: lang.value==='en' ? 'en' : 'ch',
+    ocrVersion: 'PP-OCRv6',
+    worker:false,
+    ortOptions:{ backend:'wasm', wasmPaths:'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/', numThreads:1, simd:true }
+  });
+  return engine;
+}
+
+// recognize a specific image by index
+async function recognizeOne(idx){
+  const img=images[idx];
+  if(!img) return;
+  const e=await getEngine();
+  const src=new Image();
+  src.src=img.url;
+  await new Promise((res,rej)=>{ src.onload=res; src.onerror=rej; });
+  let ready=src;
+  if(enhance.checked) ready=preprocess(src);   // 增强为可选项，默认用原图识别
+  const [result]=await e.predict(ready);
+  const items=(result.items||[]).map(it=>({
+    text:(it.text||'').trim(),
+    score:+(it.score||0).toFixed(3),
+    poly:it.poly||null
+  })).filter(it=>it.text);
+  img.items=items;
+  img.done=true;
+  img.reviewed=false;
+}
+
+// recognize current image only
+ocrCurrentBtn.addEventListener('click', async ()=>{
+  if(!images.length){ showToast('请先上传图片'); return; }
+  if(currentIndex<0) currentIndex=0;
+  activeTextIndex=currentIndex;
+  ocrAllBtn.disabled=ocrCurrentBtn.disabled=true;
+  progress.classList.add('show'); fill.style.width='5%'; pStatus.textContent='准备中…';
+  try{
+    await recognizeOne(currentIndex);
+    fill.style.width='100%'; pStatus.textContent='识别完成';
+    if(!images[currentIndex].items.length) showToast('未识别到文字，请尝试使用更清晰的图片');
+    showResultFor(currentIndex);
+  }catch(err){
+    console.error(err); showToast('识别失败：'+err.message);
+  }finally{
+    ocrAllBtn.disabled=ocrCurrentBtn.disabled=false;
+    setTimeout(()=>progress.classList.remove('show'),600);
+    renderThumbs();
+  }
+});
+
+// recognize all images
+ocrAllBtn.addEventListener('click', async ()=>{
+  if(!images.length){ showToast('请先上传图片'); return; }
+  ocrAllBtn.disabled=ocrCurrentBtn.disabled=true;
+  progress.classList.add('show');
+  try{
+    const total=images.length;
+    for(let i=0;i<total;i++){
+      pStatus.textContent=`正在识别第 ${i+1}/${total} 张…`;
+      fill.style.width='5%';
+      await recognizeOne(i);
+      fill.style.width='100%';
       renderThumbs();
     }
-  });
+    activeTextIndex=0;
+    fill.style.width='100%'; pStatus.textContent=`识别完成（共 ${total} 张）`;
+    showResultFor(0);
+  }catch(err){
+    console.error(err); showToast('识别失败：'+err.message);
+  }finally{
+    ocrAllBtn.disabled=ocrCurrentBtn.disabled=false;
+    setTimeout(()=>progress.classList.remove('show'),600);
+  }
+});
 
-  // recognize all images
-  ocrAllBtn.addEventListener('click', async ()=>{
-    if(!images.length){ showToast('请先上传图片'); return; }
-    ocrAllBtn.disabled=ocrCurrentBtn.disabled=true;
-    progress.classList.add('show');
-    try{
-      const total=images.length;
-      for(let i=0;i<total;i++){
-        pStatus.textContent=`正在识别第 ${i+1}/${total} 张…`;
-        fill.style.width='5%';
-        await recognizeOne(i);
-        fill.style.width='100%';
-        renderThumbs();
+/* ---------- result tabs ---------- */
+function renderResultTabs(){
+  const doneImgs=images.filter(i=>i.done);
+  tabBar.innerHTML=doneImgs.length?doneImgs.map((img)=>{
+    const orig=images.indexOf(img);
+    return `<div class="tab${orig===activeTextIndex?' active':''}" data-orig="${orig}">${img.name}${img.reviewed?' ✓':''}<span class="tab-del" data-del="${orig}">×</span></div>`;
+  }).join(''):'';
+}
+tabBar.addEventListener('click',e=>{
+  const del=e.target.closest('.tab-del');
+  if(del){
+    const orig=+del.dataset.del;
+    images[orig].items=[]; images[orig].done=false; images[orig].reviewed=false;
+    renderThumbs(); renderResultTabs();
+    showResultFor(activeTextIndex);
+    return;
+  }
+  const t=e.target.closest('.tab');
+  if(t) showResultFor(+t.dataset.orig);
+});
+function showResultFor(orig){
+  if(orig<0||orig>=images.length) return;
+  activeTextIndex=orig;
+  const img=images[orig];
+  rcImg.src=img.url||'';
+  secResult.classList.remove('hidden');
+  renderOcrLines(img);
+  renderResultTabs();
+  updateReviewUI();
+  setTimeout(()=>secResult.scrollIntoView({behavior:'smooth',block:'start'}),60);
+}
+function renderOcrLines(img){
+  const items=img.items||[];
+  if(!items.length){ ocrLines.innerHTML='<div class="ocr-line"><span class="txt">（无识别结果）</span></div>'; return; }
+  ocrLines.innerHTML=items.map(it=>{
+    const low=it.score<CONF_THRESH;
+    const pct=Math.round(it.score*100);
+    return `<div class="ocr-line"><span class="conf${low?' low':''}">${pct}%</span><span class="txt${low?' low':''}">${escapeHtml(it.text)}</span></div>`;
+  }).join('');
+}
+
+/* ---------- review gate ---------- */
+function updateReviewUI(){
+  const doneImgs=images.filter(i=>i.done);
+  const reviewedImgs=doneImgs.filter(i=>i.reviewed);
+  reviewCount.textContent=`已核对 ${reviewedImgs.length}/${doneImgs.length}`;
+  const cur=images[activeTextIndex];
+  if(cur&&cur.done){
+    reviewBtn.textContent=cur.reviewed?'✓ 本页已核对（点击取消）':'✓ 确认本页已核对';
+    reviewBtn.classList.toggle('confirmed',cur.reviewed);
+  }
+  if(doneImgs.length&&reviewedImgs.length!==doneImgs.length){
+    reviewWarn.textContent=`还有 ${doneImgs.length-reviewedImgs.length} 张未核对，未核对完成前无法导出`;
+  } else {
+    reviewWarn.textContent='';
+  }
+}
+reviewBtn.addEventListener('click',()=>{
+  const cur=images[activeTextIndex];
+  if(!cur||!cur.done){ showToast('请先识别该页'); return; }
+  cur.reviewed=!cur.reviewed;
+  renderResultTabs();
+  updateReviewUI();
+  showToast(cur.reviewed?'本页已标记为核对完成':'已取消本页核对标记');
+});
+function allReviewed(){
+  const done=images.filter(i=>i.done);
+  return done.length>0 && done.every(i=>i.reviewed);
+}
+
+/* ---------- split into table (per image) ---------- */
+const QTY_UNIT='片|包|盒|袋|个|Kg|kg|克|g|听|瓶|箱|只|条|份|斤|两|件|T|桶|扎|把|升|L|ml|毫升|双|对|头|尾|排|块|卷|罐|串|打|枚|板|束|提|吨';
+function groupToRows(items){
+  const boxes=items.map(it=>{
+    const p=it.poly||[];
+    const xs=p.map(pt=>pt[0]), ys=p.map(pt=>pt[1]);
+    return {it, x:Math.min(...xs), y:Math.min(...ys), w:Math.max(...xs)-Math.min(...xs), h:Math.max(...ys)-Math.min(...ys),
+            cx:(Math.min(...xs)+Math.max(...xs))/2, cy:(Math.min(...ys)+Math.max(...ys))/2};
+  }).sort((a,b)=>a.y-b.y);
+  const rows=[];
+  for(const b of boxes){
+    let placed=false;
+    for(const row of rows){
+      if(!row.length) continue;
+      const rowTop=Math.min(...row.map(r=>r.y));
+      const rowBottom=Math.max(...row.map(r=>r.y+r.h));
+      const midRow=(rowTop+rowBottom)/2;
+      const rowH=rowBottom-rowTop;
+      if(Math.abs(b.cy-midRow) < Math.max(12, rowH*0.5) && Math.abs(b.x-row[0].x) > 0){
+        row.push(b); placed=true; break;
       }
-      activeTextIndex=0;
-      fill.style.width='100%'; pStatus.textContent=`识别完成（共 ${total} 张）`;
-      showResultFor(0);
-    }catch(err){
-      console.error(err); showToast('识别失败：'+err.message);
-    }finally{
-      ocrAllBtn.disabled=ocrCurrentBtn.disabled=false;
-      setTimeout(()=>progress.classList.remove('show'),600);
+    }
+    if(!placed) rows.push([b]);
+  }
+  return rows.map(row=>row.sort((a,b)=>a.x-b.x));
+}
+// 把一行中的若干识别框解析为“品名 + 数量”两列（依赖行尾数量单位）
+function parseRowBoxes(boxes){
+  const list=boxes.map(b=>({t:(b.it.text||'').trim(), s:b.it.score})).filter(b=>b.t);
+  if(!list.length) return null;
+  const joined=list.map(b=>b.t).join('');
+  const re=new RegExp('(\\d+(?:\\.\\d+)?)('+QTY_UNIT+')$');
+  const m=joined.match(re);
+  if(m){
+    const splitAt=m.index;
+    let acc=0, nameScore=list[0].s, qtyScore=null;
+    for(const b of list){
+      if(acc < splitAt) nameScore=b.s;
+      acc+=b.t.length;
+      if(qtyScore===null && acc>=splitAt) qtyScore=b.s;
+    }
+    if(qtyScore===null) qtyScore=list[list.length-1].s;
+    return { name:joined.slice(0,splitAt), qty:joined.slice(splitAt), nameScore, qtyScore };
+  }
+  return { name:joined, qty:'', nameScore:Math.round(Math.min(...list.map(b=>b.s))*1000)/1000, qtyScore:0.5 };
+}
+function makeSnapshot(img){
+  const rows=groupToRows(img.items||[]);
+  const out={ name:img.name, rows:[], confs:[], confirmed:[] };
+  rows.forEach(boxrow=>{
+    const p=parseRowBoxes(boxrow);
+    if(!p) return;
+    out.rows.push([p.name, p.qty]);
+    out.confs.push([p.nameScore, p.qtyScore]);
+    out.confirmed.push(false);
+  });
+  return out;
+}
+// current editable rows (belongs to active snapshot)
+let editRows=[];
+let editConfs=[];
+let editConfirmed=[];
+let activeSnapName=null;
+function currentSnap(){ return tableSnapshots.find(s=>s.name===activeSnapName)||null; }
+
+splitBtn.addEventListener('click',()=>{
+  if(!images.filter(i=>i.done).length){ showToast('请先识别图片'); return; }
+  if(!tableSnapshots.length) tableSnapshots=images.filter(i=>i.done).map(makeSnapshot);   // 仅构建一次，避免清空逐行确认
+  const active=tableSnapshots.findIndex(s=>images[activeTextIndex]&&s.name===images[activeTextIndex].name);
+  const tgt=active>=0?active:0;
+  loadEditRows(tableSnapshots[tgt]&&tableSnapshots[tgt].name);
+  secTable.classList.remove('hidden');
+  updateSheetCount();
+  updateSheetSel();
+  setTimeout(()=>secTable.scrollIntoView({behavior:'smooth',block:'start'}),100);
+});
+// 工作表切换下拉
+function updateSheetSel(){
+  sheetSel.innerHTML=tableSnapshots.map(s=>{
+    const c=(s.confirmed||[]).filter(x=>x).length;
+    return `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}（${c}/${s.rows.length} 行已核对）</option>`;
+  }).join('');
+  sheetSel.value=activeSnapName||(tableSnapshots[0]&&tableSnapshots[0].name)||'';
+}
+sheetSel.addEventListener('change',e=>{
+  persistEdit();           // 先保存当前工作表的编辑与确认状态
+  loadEditRows(e.target.value);
+  updateSheetSel();
+});
+// 切换表格时从快照恢复（含逐行确认状态）
+function loadEditRows(name){
+  const snap=tableSnapshots.find(s=>s.name===name)||tableSnapshots[0];
+  activeSnapName=snap?snap.name:null;
+  if(!snap){ editRows=[]; editConfs=[]; editConfirmed=[]; currentCols=2; renderTable(); return; }
+  editRows=snap.rows.map(r=>r.map(c=>String(c||'').trim()));
+  editConfs=snap.confs.map(r=>r.slice());
+  editConfirmed=(snap.confirmed||[]).slice();
+  currentCols=Math.max(2,...editRows.map(r=>r.length));
+  renderTable();
+  updateSheetSel();
+}
+// 把当前编辑状态写回快照（含确认状态）
+function persistEdit(){
+  const snap=currentSnap();
+  if(snap){
+    snap.rows=editRows.map(r=>r.map(c=>String(c==null?'':c).replace(/⚠待确认/g,'').trim()));
+    snap.confs=editConfs.map(r=>r.map(c=>(c==null?1:c)));
+    snap.confirmed=editConfirmed.slice();
+  }
+}
+
+/* ---------- data validation / review ---------- */
+function showValidate(pass,title,items){
+  validatePanel.classList.add('show');
+  validatePanel.classList.toggle('ok',pass);
+  validatePanel.classList.toggle('warn',!pass);
+  vpHead.textContent=title;
+  vpBody.innerHTML='<ul>'+items.map(i=>`<li class="${i.type}">${i.msg}</li>`).join('')+'</ul>';
+}
+function validateData(){
+  if(!editRows.length){ showToast('当前无表格数据，请先“按行拆分为表格”'); return false; }
+  const issues=[];
+  const seen=new Map();
+  editRows.forEach((row,ri)=>{
+    const cells=row.map(c=>String(c==null?'':c).replace(/⚠待确认/g,'').trim());
+    const name=cells[0]||'';
+    const qty=editConfs[ri]&&editConfs[ri][1] || cells[1]||'';
+    if(!name) issues.push({type:'bad',msg:`第 ${ri+1} 行：品名为空`});
+    if(qty && !/^\d+(\.\d+)?[a-zA-Z\u4e00-\u9fa5]+$/.test(qty) && !/^\d+(\.\d+)?$/.test(qty))
+      issues.push({type:'bad',msg:`第 ${ri+1} 行：数量“${qty}”格式异常`});
+    if(name){
+      if(seen.has(name)) issues.push({type:'bad',msg:`“${name}”重复（第 ${seen.get(name)+1} 与 ${ri+1} 行）`});
+      else seen.set(name,ri);
     }
   });
-
-  /* ---------- result tabs ---------- */
-  function renderResultTabs(){
-    const doneImgs=images.filter(i=>i.done);
-    tabBar.innerHTML=doneImgs.length?doneImgs.map((img,idx)=>{
-      const orig=images.indexOf(img);
-      return `<div class="tab${orig===activeTextIndex?' active':''}" data-orig="${orig}">${img.name}<span class="tab-del" data-del="${orig}">×</span></div>`;
-    }).join(''):'';
+  const unconfirmed=editConfirmed.filter(c=>!c).length;
+  if(unconfirmed>0) issues.push({type:'bad',msg:`还有 ${unconfirmed} 行未逐行确认，请对照原图确认后再导出`});
+  if(issues.length){
+    showValidate(false,`发现 ${issues.length} 处待处理项`,issues);
+    showToast(`校验未通过：${issues.length} 处待处理`);
+    return false;
   }
-  tabBar.addEventListener('click',e=>{
-    const del=e.target.closest('.tab-del');
-    if(del){
-      const orig=+del.dataset.del;
-      images[orig].text=''; images[orig].done=false;
-      renderThumbs(); renderResultTabs();
-      showResultFor(activeTextIndex);
-      return;
+  showValidate(true,'校验通过 ✓',[{type:'ok',msg:`共 ${editRows.length} 行，全部已逐行确认，无空品名、无重复、数量格式正确`}]);
+  showToast('校验通过，可以导出');
+  return true;
+}
+validateBtn.addEventListener('click',validateData);
+
+/* ---------- render editable table ---------- */
+function renderTable(){
+  colCount.value=currentCols;
+  let html='<thead><tr><th class="ok-col">✓核对</th>';
+  for(let c=0;c<currentCols;c++) html+=`<th>${c===0?'品名':'列 '+(c+1)}</th>`;
+  html+='</tr></thead><tbody>';
+  if(!editRows.length){
+    html+='</tbody>'; grid.innerHTML=html; return;
+  }
+  editRows.forEach((row,ri)=>{
+    const ok=!!editConfirmed[ri];
+    html+=`<tr${ok?' class="row-ok"':''} data-ri="${ri}">`;
+    html+=`<td class="ok-col"><button class="row-ok-btn${ok?' on':''}" data-r="${ri}" title="对照原图核对本行">${ok?'✓ 已核对':'核对'}</button></td>`;
+    for(let c=0;c<currentCols;c++){
+      const v=String(row[c]==null?'':row[c]).replace(/⚠待确认/g,'').trim();
+      const sc=editConfs[ri]?editConfs[ri][c]:null;
+      const low=sc!==null && sc<CONF_THRESH;
+      const cls='contenteditable="true"'+(low?' class="lowcell"':'');
+      const badge=low?' <span class="cell-flag" data-r="'+ri+'" data-c="'+c+'">⚠低置信</span>':'';
+      html+=`<td ${cls} data-r="${ri}" data-c="${c}">${escapeHtml(v)}${badge}</td>`;
     }
-    const t=e.target.closest('.tab');
-    if(t) showResultFor(+t.dataset.orig);
+    html+='</tr>';
   });
-  function showResultFor(orig){
-    if(orig<0||orig>=images.length) return;
-    activeTextIndex=orig;
-    ocrText.value=images[orig].text||'';
-    secResult.classList.remove('hidden');
-    lineCount.textContent=(images[orig].text?images[orig].text.split('\n').filter(l=>l.trim()):[]).length+' 行';
-    renderResultTabs();
-    setTimeout(()=>secResult.scrollIntoView({behavior:'smooth',block:'start'}),60);
-  }
-  ocrText.addEventListener('input',()=>{
-    if(activeTextIndex>=0&&activeTextIndex<images.length) images[activeTextIndex].text=ocrText.value;
-    lineCount.textContent=(ocrText.value?ocrText.value.split('\n').filter(l=>l.trim()):[]).length+' 行';
-  });
-
-  /* ---------- split into table (per image) ---------- */
-  function splitLinesToCells(line){
-    // split by tab first, then full-width/half-width comma
-    const parts=line.split(/\t|，|,/).map(s=>s.trim()).filter(s=>s!=='');
-    return parts.length?parts:[line.trim()];
-  }
-  // current editable rows (belongs to activeTextIndex)
-  let editRows=[];
-
-  splitBtn.addEventListener('click',()=>{
-    if(!images.filter(i=>i.done).length){ showToast('请先识别图片'); return; }
-    // rebuild snapshots for all done images
-    tableSnapshots=images.filter(i=>i.done).map(img=>({
-      name:img.name,
-      rows:img.text.split('\n').map(l=>l.trim()).filter(l=>l!=='').map(splitLinesToCells)
-    }));
-    // edit the active image's rows
-    const active=tableSnapshots.findIndex(s=>images[activeTextIndex]&&s.name===images[activeTextIndex].name);
-    const tgt=active>=0?active:0;
-    loadEditRows(tableSnapshots[tgt]&&tableSnapshots[tgt].name);
-    secTable.classList.remove('hidden');
-    updateSheetCount();
-    setTimeout(()=>secTable.scrollIntoView({behavior:'smooth',block:'start'}),100);
-  });
-  function loadEditRows(name){
-    const snap=tableSnapshots.find(s=>s.name===name)||tableSnapshots[0];
-    if(!snap){ editRows=[]; currentCols=1; renderTable(); return; }
-    editRows=snap.rows.map(r=>r.slice());
-    currentCols=Math.max(1,...editRows.map(r=>r.length));
-    renderTable();
-  }
-
-  /* ---------- render editable table ---------- */
-  function renderTable(){
-    colCount.value=currentCols;
-    let html='<thead><tr>';
-    for(let c=0;c<currentCols;c++) html+=`<th>列 ${c+1}</th>`;
-    html+='</tr></thead><tbody>';
-    if(!editRows.length){
-      html+='<tr>'; for(let c=0;c<currentCols;c++) html+='<td class="empty">空</td>'; html+='</tr>';
-    } else {
-      editRows.forEach((row,ri)=>{
-        html+='<tr>';
-        for(let c=0;c<currentCols;c++){
-          const v=(row[c]||'').trim();
-          html+=`<td contenteditable="true" data-r="${ri}" data-c="${c}">${escapeHtml(v)}</td>`;
-        }
-        html+='</tr>';
-      });
-    }
-    html+='</tbody>';
-    grid.innerHTML=html;
-    bindCellHandlers();
-  }
-  function bindCellHandlers(){
-    grid.querySelectorAll('td[contenteditable]').forEach(td=>{
-      td.addEventListener('input',()=>{
-        const r=+td.dataset.r, c=+td.dataset.c;
-        if(!editRows[r]) editRows[r]=[];
-        editRows[r][c]=td.textContent;
-      });
+  html+='</tbody>';
+  grid.innerHTML=html;
+  bindCellHandlers();
+}
+function bindCellHandlers(){
+  grid.querySelectorAll('td[contenteditable]').forEach(td=>{
+    td.addEventListener('input',()=>{
+      const r=+td.dataset.r, c=+td.dataset.c;
+      if(!editRows[r]) editRows[r]=[];
+      editRows[r][c]=td.textContent.replace(/⚠待确认/g,'').trim();
+      if(editConfs[r]) editConfs[r][c]=1;   // 手工修改视为已校正
+      const flag=td.querySelector('.cell-flag');
+      if(flag) flag.remove();
+      td.classList.remove('lowcell');
     });
-  }
-  function escapeHtml(s){
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  });
+  grid.querySelectorAll('.row-ok-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const r=+btn.dataset.r;
+      editConfirmed[r]=!editConfirmed[r];
+      persistEdit();
+      renderTable();
+    });
+  });
+}
+function escapeHtml(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
             .replace(/"/g,'&quot;').replace(/\n/g,'<br>');
-  }
+}
 
-  applyCols.addEventListener('click',()=>{
-    let n=parseInt(colCount.value,10);
-    if(isNaN(n)||n<1){ showToast('列数需为不小于 1 的整数'); return; }
-    if(n>20){ showToast('列数最多 20 列'); n=20; }
-    currentCols=n;
-    editRows=editRows.map(row=>{
-      const nr=[];
-      for(let c=0;c<n;c++) nr.push(row[c]||'');
-      return nr;
-    });
-    renderTable();
-  });
-  addRowBtn.addEventListener('click',()=>{
-    editRows.push(Array(currentCols).fill(''));
-    renderTable();
-    const sc=grid.closest('.table-scroll'); sc.scrollTop=sc.scrollHeight;
-  });
+applyCols.addEventListener('click',()=>{
+  let n=parseInt(colCount.value,10);
+  if(isNaN(n)||n<1){ showToast('列数需为不小于 1 的整数'); return; }
+  if(n>20){ showToast('列数最多 20 列'); n=20; }
+  currentCols=n;
+  editRows=editRows.map(row=>{ const nr=[]; for(let c=0;c<n;c++) nr.push(row[c]||''); return nr; });
+  editConfs=editConfs.map(row=>{ const nr=[]; for(let c=0;c<n;c++) nr.push(row[c]||1); return nr; });
+  renderTable();
+});
+addRowBtn.addEventListener('click',()=>{
+  editRows.push(Array(currentCols).fill(''));
+  editConfs.push(Array(currentCols).fill(1));
+  editConfirmed.push(false);
+  renderTable();
+  const sc=grid.closest('.table-scroll'); sc.scrollTop=sc.scrollHeight;
+});
 
-  /* ---------- export (one sheet per image) ---------- */
-  function updateSheetCount(){
-    sheetCount.textContent=tableSnapshots.length?`导出 ${tableSnapshots.length} 个 Sheet`:'';
-  }
-  function sheetName(name){
-    let base=(name||'Sheet').replace(/\.[^.]+$/,'').replace(/[\\\/\?\*\[\]:]/g,'_').slice(0,31);
-    return base||'Sheet';
-  }
-  exportBtn.addEventListener('click',()=>{
-    if(!tableSnapshots.length){ showToast('请先点“按行拆分为表格”'); return; }
-    // persist edited rows back to the active snapshot
-    const activeSnap=tableSnapshots.find(s=>s.name===images[activeTextIndex]&&images[activeTextIndex].name);
-    if(activeSnap) activeSnap.rows=editRows.map(r=>r.slice());
-    const wb=XLSX.utils.book_new();
-    const used={};
-    tableSnapshots.forEach((snap,idx)=>{
-      let nm=sheetName(snap.name);
-      if(used[nm]){ let k=2; while(used[nm+'_'+k])k++; nm=nm+'_'+k; }
-      used[nm]=true;
-      const ws=XLSX.utils.aoa_to_sheet(snap.rows);
-      XLSX.utils.book_append_sheet(wb,ws,nm||('Sheet'+(idx+1)));
-    });
-    const name='手写表格-'+new Date().toISOString().slice(0,10)+'.xlsx';
-    XLSX.writeFile(wb,name);
-    showToast('已导出 '+name);
+/* ---------- export (one sheet per image) ---------- */
+function updateSheetCount(){
+  sheetCount.textContent=tableSnapshots.length?`导出 ${tableSnapshots.length} 个 Sheet`:'';
+}
+function sheetName(name){
+  let base=(name||'Sheet').replace(/\.[^.]+$/,'').replace(/[\\\/\?\*\[\]:]/g,'_').slice(0,31);
+  return base||'Sheet';
+}
+function allRowsConfirmed(snap){
+  if(!snap.rows||!snap.rows.length) return false;
+  return (snap.confirmed||[]).every(c=>c);
+}
+exportBtn.addEventListener('click',()=>{
+  if(!tableSnapshots.length){ showToast('请先点“按行拆分为表格”'); return; }
+  persistEdit();   // 把正在编辑的表格与逐行确认状态写回快照
+  // gate 1: 所有图片已“核对识别结果”
+  if(!allReviewed()){ showToast('请先在“核对识别结果”中逐页确认所有图片已核对'); return; }
+  // gate 2: 每个 Sheet 的每一行都必须逐行确认
+  const badSnap=tableSnapshots.find(s=>!allRowsConfirmed(s));
+  if(badSnap){ showToast('还有未逐行确认的表格：请回到“校验数据”，对每一行点击“核对”后再导出'); return; }
+  // gate 3: 当前页数据校验通过
+  if(!validateData()){ showToast('请先修正“校验数据”中的问题再导出'); return; }
+  const wb=XLSX.utils.book_new();
+  const used={};
+  tableSnapshots.forEach((snap,idx)=>{
+    let nm=sheetName(snap.name);
+    if(used[nm]){ let k=2; while(used[nm+'_'+k])k++; nm=nm+'_'+k; }
+    used[nm]=true;
+    const ws=XLSX.utils.aoa_to_sheet(snap.rows.map(r=>r.map(c=>String(c==null?'':c).replace(/⚠待确认/g,'').trim())));
+    XLSX.utils.book_append_sheet(wb,ws,nm||('Sheet'+(idx+1)));
   });
-
-})();
+  const name='手写表格-'+new Date().toISOString().slice(0,10)+'.xlsx';
+  XLSX.writeFile(wb,name);
+  showToast('已导出 '+name);
+});
 </script>
 </body>
 </html>
