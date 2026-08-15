@@ -82,11 +82,36 @@
   .dropzone .dz-icon{font-size:34px;margin-bottom:10px;filter:grayscale(.2)}
   .dropzone .dz-title{font-family:'Fraunces',serif;font-size:18px;font-weight:600}
   .dropzone .dz-sub{color:var(--ink-soft);font-size:13px;margin-top:6px}
-  .dropzone.filled{border-style:solid;cursor:default;padding:18px;text-align:left}
-  .dropzone.filled:hover{background:#fffdf8}
+  .dropzone .dz-count{color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:12px;margin-bottom:8px;display:none}
+
+  /* thumbnail grid */
+  .thumb-grid{display:flex;gap:12px;margin-top:18px;overflow-x:auto;padding-bottom:6px}
+  .thumb-grid::-webkit-scrollbar{height:8px}
+  .thumb-grid::-webkit-scrollbar-thumb{background:var(--line);border-radius:99px}
+  .thumb{
+    flex:none;width:118px;border:2px solid var(--line);border-radius:10px;overflow:hidden;
+    background:#fff;cursor:pointer;position:relative;transition:all .15s;text-align:center;
+  }
+  .thumb:hover{border-color:var(--ink-soft)}
+  .thumb.active{border-color:var(--accent);box-shadow:0 0 0 3px rgba(194,64,43,.18)}
+  .thumb img{width:100%;height:78px;object-fit:cover;display:block;background:var(--paper-2)}
+  .thumb .thumb-name{font-size:10.5px;color:var(--ink-soft);padding:5px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .thumb .thumb-del{
+    position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;border:none;
+    background:rgba(28,26,23,.72);color:#fff;font-size:13px;line-height:1;cursor:pointer;
+    display:none;align-items:center;justify-content:center;padding:0;
+  }
+  .thumb:hover .thumb-del{display:flex}
+  .thumb .thumb-del:hover{background:var(--accent)}
+  .thumb .thumb-badge{
+    position:absolute;bottom:39px;left:4px;font-size:10px;background:var(--green);color:#fff;
+    border-radius:5px;padding:1px 5px;font-family:'IBM Plex Mono',monospace;
+  }
+  .thumb .thumb-badge.done{background:var(--green)}
+  .thumb .thumb-badge.pending{background:var(--ink-faint)}
 
   /* preview image */
-  .preview-row{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:20px}
+  .preview-row{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:22px}
   @media(max-width:760px){.preview-row{grid-template-columns:1fr}}
   .img-panel{display:flex;flex-direction:column}
   .img-frame{
@@ -97,6 +122,18 @@
   .img-frame svg.placeholder{width:60px;height:60px;stroke:var(--ink-faint)}
   .img-tools{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
   .img-controls{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;align-items:center}
+
+  /* result tabs */
+  .tabs{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:10px}
+  .tab{
+    font-size:12.5px;color:var(--ink-soft);background:var(--paper);border:1px solid var(--line);
+    padding:6px 12px;border-radius:8px;cursor:pointer;transition:all .15s;max-width:180px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .tab:hover{border-color:var(--ink-soft)}
+  .tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .tab .tab-del{margin-left:6px;font-weight:700;color:inherit;opacity:.7}
+  .tab .tab-del:hover{opacity:1}
 
   /* controls */
   .controls{display:flex;flex-wrap:wrap;gap:14px;margin-top:20px;align-items:flex-end}
@@ -190,23 +227,27 @@
   <!-- 1. upload -->
   <section id="sec-upload" class="fade-in">
     <div class="step-label">01 · 上传图片</div>
-    <h2>放入一张手写图片</h2>
-    <p class="hint">支持表格、清单、流水账等手写内容。图片越清晰、字迹越工整，识别效果越好。可在下方微调亮度 / 对比度提升准确率。</p>
+    <h2>放入一张或多张手写图片</h2>
+    <p class="hint">支持一次选择多张、或拖拽多张图片。支持表格、清单、流水账等手写内容。图片越清晰、字迹越工整，识别效果越好。</p>
 
     <div class="dropzone" id="dropzone">
       <div class="dz-icon">✍️</div>
-      <div class="dz-title">点击选择或拖拽图片到这里</div>
-      <div class="dz-sub">支持 JPG / PNG / WebP，建议不低于 800px 宽</div>
-      <input type="file" id="fileInput" accept="image/*" class="hidden">
+      <div class="dz-title">点击选择或拖拽多张图片到这里</div>
+      <div class="dz-sub">支持 JPG / PNG / WebP，可一次多选，建议不低于 800px 宽</div>
+      <input type="file" id="fileInput" accept="image/*" multiple class="hidden">
     </div>
 
+    <!-- thumbnail grid -->
+    <div class="thumb-grid hidden" id="thumbGrid"></div>
+
+    <!-- current image preview + ocr settings -->
     <div class="preview-row hidden" id="previewRow">
       <div class="img-panel">
         <div class="img-frame"><img id="previewImg" alt="待识别图片"></div>
         <div class="img-controls">
           <div class="field"><label>亮度</label><input type="range" id="brightness" min="0.5" max="1.6" step="0.05" value="1"></div>
           <div class="field"><label>对比度</label><input type="range" id="contrast" min="0.5" max="2.2" step="0.05" value="1"></div>
-          <button class="btn btn-sm" id="replaceBtn">更换图片</button>
+          <button class="btn btn-sm" id="addMoreBtn">＋ 添加更多</button>
         </div>
       </div>
       <div class="img-panel">
@@ -228,7 +269,10 @@
             <option value="table">按表格结构（自动分行）</option>
           </select>
         </div>
-        <button class="btn btn-primary" id="ocrBtn" style="margin-top:18px">开始识别 <span>→</span></button>
+        <div class="img-tools" style="margin-top:18px">
+          <button class="btn btn-primary" id="ocrAllBtn">识别全部 <span>→</span></button>
+          <button class="btn" id="ocrCurrentBtn">只识别当前</button>
+        </div>
       </div>
     </div>
 
@@ -242,7 +286,8 @@
   <section id="sec-result" class="hidden fade-in">
     <div class="step-label">02 · 校对文本</div>
     <h2>检查识别结果</h2>
-    <p class="hint">识别并非完美，请核对并修正。横排手写内容会自动按行拆分，每行将作为一个表格行。</p>
+    <p class="hint">每张图片的识别结果是独立的，可点击上方页签切换查看并分别校对。横排手写内容会自动按行拆分，每行将作为一个表格行。</p>
+    <div class="tabs" id="tabBar"></div>
     <div class="result-block">
       <textarea class="ocr-text" id="ocrText" spellcheck="false"></textarea>
     </div>
@@ -257,7 +302,7 @@
   <section id="sec-table" class="hidden fade-in">
     <div class="step-label">03 · 整理表格</div>
     <h2>编辑单元格再导出</h2>
-    <p class="hint">点击单元格可直接编辑。若一行内需要用逗号 / Tab 拆成多列，可先在上一步用“分隔线”拆分。</p>
+    <p class="hint">点击单元格可直接编辑。若一行内需要用逗号 / Tab 拆成多列，可先在上一步用“分隔线”拆分。多张图片时，每张图片会导出为一个独立 Sheet。</p>
     <div class="controls">
       <div class="field"><label>当前列数</label><input type="text" id="colCount" value="1" style="min-width:80px"></div>
       <button class="btn btn-ghost btn-sm" id="applyCols">应用列数</button>
@@ -269,6 +314,7 @@
     <div class="toolbar">
       <button class="btn btn-sm" id="addRowBtn">＋ 添加行</button>
       <div class="spacer"></div>
+      <span class="badge" id="sheetCount"></span>
       <button class="btn btn-primary" id="exportBtn">导出 Excel <span>↧</span></button>
     </div>
   </section>
@@ -288,17 +334,22 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const dropzone=$('dropzone'), fileInput=$('fileInput'), previewImg=$('previewImg');
-  const previewRow=$('previewRow'), brightness=$('brightness'), contrast=$('contrast');
+  const previewRow=$('previewRow'), thumbGrid=$('thumbGrid'), brightness=$('brightness'), contrast=$('contrast');
   const progress=$('progress'), fill=$('fill'), pStatus=$('pStatus');
-  const ocrBtn=$('ocrBtn'), lang=$('lang'), mode=$('mode');
-  const secResult=$('sec-result'), ocrText=$('ocrText'), splitBtn=$('splitBtn'), lineCount=$('lineCount');
+  const ocrAllBtn=$('ocrAllBtn'), ocrCurrentBtn=$('ocrCurrentBtn'), lang=$('lang'), mode=$('mode');
+  const secResult=$('sec-result'), ocrText=$('ocrText'), splitBtn=$('splitBtn'), lineCount=$('lineCount'), tabBar=$('tabBar');
   const secTable=$('sec-table'), grid=$('grid'), colCount=$('colCount'), applyCols=$('applyCols');
-  const addRowBtn=$('addRowBtn'), exportBtn=$('exportBtn');
+  const addRowBtn=$('addRowBtn'), exportBtn=$('exportBtn'), sheetCount=$('sheetCount');
   const toast=$('toast');
 
-  let sourceFile=null;
-  let tableData=[]; // array of arrays
+  // image model: {id, file, name, url, text, done}
+  let images=[];
+  let currentIndex=-1;      // selected image for preview
+  let activeTextIndex=-1;   // which image's text is shown in result textarea
+  // raw table data snapshot per image for export
+  let tableSnapshots=[];    // {name, rows:[[...]]}
   let currentCols=1;
+  let seq=0;
 
   /* ---------- toast ---------- */
   let toastTimer;
@@ -307,29 +358,74 @@
     clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),ms);
   }
 
-  /* ---------- upload ---------- */
-  function handleFile(file){
-    if(!file) return;
-    if(!file.type.match(/^image\//)){ showToast('请选择图片文件'); return; }
-    sourceFile=file;
-    const url=URL.createObjectURL(file);
-    previewImg.onload=()=>{ URL.revokeObjectURL(url); };
-    previewImg.src=url;
+  /* ---------- upload (multi) ---------- */
+  function addFiles(fileList){
+    const files=Array.from(fileList||[]);
+    if(!files.length) return;
+    const added=[];
+    files.forEach(f=>{
+      if(!f.type.match(/^image\//)){ showToast('已跳过非图片文件：'+f.name); return; }
+      images.push({id:++seq, file:f, name:f.name, url:URL.createObjectURL(f), text:'', done:false});
+      added.push(f);
+    });
+    if(!added.length) return;
+    if(currentIndex<0) currentIndex=0;
+    renderThumbs();
+    switchPreview(currentIndex);
     previewRow.classList.remove('hidden');
-    dropzone.classList.add('filled');
-    dropzone.querySelector('.dz-title').textContent=file.name;
-    dropzone.querySelector('.dz-sub').textContent=(file.size/1024).toFixed(0)+' KB';
+    showToast(`已添加 ${added.length} 张图片`);
+  }
+  function renderThumbs(){
+    thumbGrid.classList.toggle('hidden', images.length===0);
+    thumbGrid.innerHTML=images.map((img,i)=>{
+      const badge=img.done?'<span class="thumb-badge done">✓ 已识别</span>':'<span class="thumb-badge pending">未识别</span>';
+      return `<div class="thumb${i===currentIndex?' active':''}" data-i="${i}">
+        <img src="${img.url}" alt="${img.name}">
+        <button class="thumb-del" data-del="${i}" title="移除">×</button>
+        ${badge}
+        <div class="thumb-name">${img.name}</div>
+      </div>`;
+    }).join('');
+  }
+  function switchPreview(i){
+    if(i<0||i>=images.length) return;
+    currentIndex=i;
+    const img=images[i];
+    previewImg.src=img.url;
+    brightness.value=1; contrast.value=1;
     applyFilters();
+    renderThumbs();
   }
   function applyFilters(){
     previewImg.style.filter=`brightness(${brightness.value}) contrast(${contrast.value})`;
   }
-  dropzone.addEventListener('click',()=>{ if(!dropzone.classList.contains('filled')) fileInput.click(); });
+  function removeImage(i){
+    if(i<0||i>=images.length) return;
+    URL.revokeObjectURL(images[i].url);
+    images.splice(i,1);
+    if(currentIndex>=images.length) currentIndex=images.length-1;
+    if(images.length===0){
+      currentIndex=-1; activeTextIndex=-1;
+      previewRow.classList.add('hidden');
+      thumbGrid.classList.add('hidden');
+      return;
+    }
+    if(currentIndex<0) currentIndex=0;
+    switchPreview(currentIndex);
+    renderResultTabs();
+  }
+  dropzone.addEventListener('click',()=>fileInput.click());
   ['dragover','dragenter'].forEach(ev=>dropzone.addEventListener(ev,e=>{e.preventDefault();dropzone.classList.add('drag');}));
   ['dragleave','drop'].forEach(ev=>dropzone.addEventListener(ev,e=>{e.preventDefault();dropzone.classList.remove('drag');}));
-  dropzone.addEventListener('drop',e=>handleFile(e.dataTransfer.files[0]));
-  fileInput.addEventListener('change',e=>handleFile(e.target.files[0]));
-  $('replaceBtn').addEventListener('click',e=>{e.stopPropagation();fileInput.click();});
+  dropzone.addEventListener('drop',e=>addFiles(e.dataTransfer.files));
+  fileInput.addEventListener('change',e=>{ addFiles(e.target.files); fileInput.value=''; });
+  $('addMoreBtn').addEventListener('click',e=>{e.stopPropagation();fileInput.click();});
+  thumbGrid.addEventListener('click',e=>{
+    const del=e.target.closest('.thumb-del');
+    if(del){ removeImage(+del.dataset.del); return; }
+    const t=e.target.closest('.thumb');
+    if(t) switchPreview(+t.dataset.i);
+  });
   brightness.addEventListener('input',applyFilters);
   contrast.addEventListener('input',applyFilters);
 
@@ -361,51 +457,137 @@
     return worker;
   }
 
-  ocrBtn.addEventListener('click', async ()=>{
-    if(!sourceFile){ showToast('请先上传图片'); return; }
-    ocrBtn.disabled=true; progress.classList.add('show'); fill.style.width='5%'; pStatus.textContent='准备中…';
+  // recognize a specific image by index
+  async function recognizeOne(idx){
+    const img=images[idx];
+    if(!img) return;
+    const w=await getWorker();
+    const src=new Image();
+    src.src=img.url;
+    await new Promise((res,rej)=>{ src.onload=res; src.onerror=rej; });
+    const scale=Math.min(1, 2600/src.naturalWidth);
+    const canvas=document.createElement('canvas');
+    canvas.width=Math.round(src.naturalWidth*scale);
+    canvas.height=Math.round(src.naturalHeight*scale);
+    const ctx=canvas.getContext('2d');
+    ctx.filter=`brightness(${brightness.value}) contrast(${contrast.value})`;
+    ctx.drawImage(src,0,0,canvas.width,canvas.height);
+    const {data}=await w.recognize(canvas);
+    img.text=(data.text||'').trim();
+    img.done=true;
+  }
+
+  // recognize current image only
+  ocrCurrentBtn.addEventListener('click', async ()=>{
+    if(!images.length){ showToast('请先上传图片'); return; }
+    if(currentIndex<0) currentIndex=0;
+    activeTextIndex=currentIndex;
+    ocrAllBtn.disabled=ocrCurrentBtn.disabled=true;
+    progress.classList.add('show'); fill.style.width='5%'; pStatus.textContent='准备中…';
     try{
-      const w=await getWorker();
-      const canvas=document.createElement('canvas');
-      const img=previewImg;
-      const scale=Math.min(1, 2600/img.naturalWidth);
-      canvas.width=Math.round(img.naturalWidth*scale);
-      canvas.height=Math.round(img.naturalHeight*scale);
-      const ctx=canvas.getContext('2d');
-      ctx.filter=`brightness(${brightness.value}) contrast(${contrast.value})`;
-      ctx.drawImage(img,0,0,canvas.width,canvas.height);
-      const {data}=await w.recognize(canvas);
-      fill.style.width='100%';
-      pStatus.textContent='识别完成';
-      const text=(data.text||'').trim();
-      if(!text){ showToast('未识别到文字，请尝试调高对比度或更换更清晰的图片'); }
-      ocrText.value=text;
-      secResult.classList.remove('hidden');
-      lineCount.textContent=(text?text.split('\n').filter(l=>l.trim()):[]).length+' 行';
-      setTimeout(()=>secResult.scrollIntoView({behavior:'smooth',block:'start'}),100);
+      await recognizeOne(currentIndex);
+      fill.style.width='100%'; pStatus.textContent='识别完成';
+      if(!images[currentIndex].text) showToast('未识别到文字，请尝试调高对比度或更换更清晰的图片');
+      showResultFor(currentIndex);
     }catch(err){
-      console.error(err);
-      showToast('识别失败：'+err.message);
+      console.error(err); showToast('识别失败：'+err.message);
     }finally{
-      ocrBtn.disabled=false;
+      ocrAllBtn.disabled=ocrCurrentBtn.disabled=false;
+      setTimeout(()=>progress.classList.remove('show'),600);
+      renderThumbs();
+    }
+  });
+
+  // recognize all images
+  ocrAllBtn.addEventListener('click', async ()=>{
+    if(!images.length){ showToast('请先上传图片'); return; }
+    ocrAllBtn.disabled=ocrCurrentBtn.disabled=true;
+    progress.classList.add('show');
+    try{
+      const total=images.length;
+      for(let i=0;i<total;i++){
+        pStatus.textContent=`正在识别第 ${i+1}/${total} 张…`;
+        fill.style.width='5%';
+        await recognizeOne(i);
+        fill.style.width='100%';
+        renderThumbs();
+      }
+      activeTextIndex=0;
+      fill.style.width='100%'; pStatus.textContent=`识别完成（共 ${total} 张）`;
+      showResultFor(0);
+    }catch(err){
+      console.error(err); showToast('识别失败：'+err.message);
+    }finally{
+      ocrAllBtn.disabled=ocrCurrentBtn.disabled=false;
       setTimeout(()=>progress.classList.remove('show'),600);
     }
   });
 
-  /* ---------- split into table ---------- */
+  /* ---------- result tabs ---------- */
+  function renderResultTabs(){
+    const doneImgs=images.filter(i=>i.done);
+    tabBar.innerHTML=doneImgs.length?doneImgs.map((img,idx)=>{
+      const orig=images.indexOf(img);
+      return `<div class="tab${orig===activeTextIndex?' active':''}" data-orig="${orig}">${img.name}<span class="tab-del" data-del="${orig}">×</span></div>`;
+    }).join(''):'';
+  }
+  tabBar.addEventListener('click',e=>{
+    const del=e.target.closest('.tab-del');
+    if(del){
+      const orig=+del.dataset.del;
+      images[orig].text=''; images[orig].done=false;
+      renderThumbs(); renderResultTabs();
+      showResultFor(activeTextIndex);
+      return;
+    }
+    const t=e.target.closest('.tab');
+    if(t) showResultFor(+t.dataset.orig);
+  });
+  function showResultFor(orig){
+    if(orig<0||orig>=images.length) return;
+    activeTextIndex=orig;
+    ocrText.value=images[orig].text||'';
+    secResult.classList.remove('hidden');
+    lineCount.textContent=(images[orig].text?images[orig].text.split('\n').filter(l=>l.trim()):[]).length+' 行';
+    renderResultTabs();
+    setTimeout(()=>secResult.scrollIntoView({behavior:'smooth',block:'start'}),60);
+  }
+  ocrText.addEventListener('input',()=>{
+    if(activeTextIndex>=0&&activeTextIndex<images.length) images[activeTextIndex].text=ocrText.value;
+    lineCount.textContent=(ocrText.value?ocrText.value.split('\n').filter(l=>l.trim()):[]).length+' 行';
+  });
+
+  /* ---------- split into table (per image) ---------- */
   function splitLinesToCells(line){
     // split by tab first, then full-width/half-width comma
     const parts=line.split(/\t|，|,/).map(s=>s.trim()).filter(s=>s!=='');
     return parts.length?parts:[line.trim()];
   }
+  // current editable rows (belongs to activeTextIndex)
+  let editRows=[];
+
   splitBtn.addEventListener('click',()=>{
-    const lines=ocrText.value.split('\n').map(l=>l.trim()).filter(l=>l!=='');
-    tableData=lines.map(splitLinesToCells);
-    currentCols=Math.max(1,...tableData.map(r=>r.length));
-    renderTable();
+    if(!images.filter(i=>i.done).length){ showToast('请先识别图片'); return; }
+    // rebuild snapshots for all done images
+    tableSnapshots=images.filter(i=>i.done).map(img=>({
+      name:img.name,
+      rows:img.text.split('\n').map(l=>l.trim()).filter(l=>l!=='').map(splitLinesToCells)
+    }));
+    // edit the active image's rows
+    const active=tableSnapshots.findIndex(s=>images[activeTextIndex]&&s.name===images[activeTextIndex].name);
+    const tgt=active>=0?active:0;
+    loadEditRows(tableSnapshots[tgt]&&tableSnapshots[tgt].name);
     secTable.classList.remove('hidden');
+    updateSheetCount();
     setTimeout(()=>secTable.scrollIntoView({behavior:'smooth',block:'start'}),100);
   });
+  function loadEditRows(name){
+    const snap=tableSnapshots.find(s=>s.name===name)||tableSnapshots[0];
+    if(!snap){ editRows=[]; currentCols=1; renderTable(); return; }
+    editRows=snap.rows.map(r=>r.slice());
+    currentCols=Math.max(1,...editRows.map(r=>r.length));
+    renderTable();
+  }
 
   /* ---------- render editable table ---------- */
   function renderTable(){
@@ -413,14 +595,14 @@
     let html='<thead><tr>';
     for(let c=0;c<currentCols;c++) html+=`<th>列 ${c+1}</th>`;
     html+='</tr></thead><tbody>';
-    if(!tableData.length){
+    if(!editRows.length){
       html+='<tr>'; for(let c=0;c<currentCols;c++) html+='<td class="empty">空</td>'; html+='</tr>';
     } else {
-      tableData.forEach(row=>{
+      editRows.forEach((row,ri)=>{
         html+='<tr>';
         for(let c=0;c<currentCols;c++){
           const v=(row[c]||'').trim();
-          html+=`<td contenteditable="true" data-r="${tableData.indexOf(row)}" data-c="${c}">${escapeHtml(v)}</td>`;
+          html+=`<td contenteditable="true" data-r="${ri}" data-c="${c}">${escapeHtml(v)}</td>`;
         }
         html+='</tr>';
       });
@@ -433,8 +615,8 @@
     grid.querySelectorAll('td[contenteditable]').forEach(td=>{
       td.addEventListener('input',()=>{
         const r=+td.dataset.r, c=+td.dataset.c;
-        if(!tableData[r]) tableData[r]=[];
-        tableData[r][c]=td.textContent;
+        if(!editRows[r]) editRows[r]=[];
+        editRows[r][c]=td.textContent;
       });
     });
   }
@@ -448,7 +630,7 @@
     if(isNaN(n)||n<1){ showToast('列数需为不小于 1 的整数'); return; }
     if(n>20){ showToast('列数最多 20 列'); n=20; }
     currentCols=n;
-    tableData=tableData.map(row=>{
+    editRows=editRows.map(row=>{
       const nr=[];
       for(let c=0;c<n;c++) nr.push(row[c]||'');
       return nr;
@@ -456,18 +638,34 @@
     renderTable();
   });
   addRowBtn.addEventListener('click',()=>{
-    tableData.push(Array(currentCols).fill(''));
+    editRows.push(Array(currentCols).fill(''));
     renderTable();
     const sc=grid.closest('.table-scroll'); sc.scrollTop=sc.scrollHeight;
   });
 
-  /* ---------- export ---------- */
+  /* ---------- export (one sheet per image) ---------- */
+  function updateSheetCount(){
+    sheetCount.textContent=tableSnapshots.length?`导出 ${tableSnapshots.length} 个 Sheet`:'';
+  }
+  function sheetName(name){
+    let base=(name||'Sheet').replace(/\.[^.]+$/,'').replace(/[\\\/\?\*\[\]:]/g,'_').slice(0,31);
+    return base||'Sheet';
+  }
   exportBtn.addEventListener('click',()=>{
-    if(!tableData.length){ showToast('暂无表格数据'); return; }
+    if(!tableSnapshots.length){ showToast('请先点“按行拆分为表格”'); return; }
+    // persist edited rows back to the active snapshot
+    const activeSnap=tableSnapshots.find(s=>s.name===images[activeTextIndex]&&images[activeTextIndex].name);
+    if(activeSnap) activeSnap.rows=editRows.map(r=>r.slice());
     const wb=XLSX.utils.book_new();
-    const ws=XLSX.utils.aoa_to_sheet(tableData);
-    XLSX.utils.book_append_sheet(wb,ws,'Sheet1');
-    const name=(sourceFile?sourceFile.name.replace(/\.[^.]+$/,''):'手写表格')+'.xlsx';
+    const used={};
+    tableSnapshots.forEach((snap,idx)=>{
+      let nm=sheetName(snap.name);
+      if(used[nm]){ let k=2; while(used[nm+'_'+k])k++; nm=nm+'_'+k; }
+      used[nm]=true;
+      const ws=XLSX.utils.aoa_to_sheet(snap.rows);
+      XLSX.utils.book_append_sheet(wb,ws,nm||('Sheet'+(idx+1)));
+    });
+    const name='手写表格-'+new Date().toISOString().slice(0,10)+'.xlsx';
     XLSX.writeFile(wb,name);
     showToast('已导出 '+name);
   });
